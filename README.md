@@ -1,136 +1,222 @@
-# Simple Event Logging System
+# Event Logger (FastAPI + Streamlit)
 
-A minimal event logging system built with **FastAPI** (backend) and **Streamlit** (frontend).
-
-It is designed as a small demo that shows how a web UI can talk to a Python API to:
-
-- Create new events
-- List all events
-- Filter events by type
-
-All data is stored **in memory only** – there is no database.
-
----
-
-## Tech Stack
-
-- **Backend:** FastAPI
-- **Frontend:** Streamlit
-- **HTTP client (frontend → backend):** `requests`
-
----
+A lightweight event logging demo application built with a **FastAPI** backend and a **Streamlit** frontend. It showcases a minimal full‑stack setup with event creation, in‑memory storage, and filtering.
 
 ## Features
 
-- **In-memory event store**
-  - Keeps events in a Python list (no external database required).
-  - Seeds a few example events at startup for quick testing.
+- **Create events (POST /events)**
+  - Create new events from the Streamlit form
+  - Backend automatically generates `id` and `timestamp`
+  - Events are stored in an in‑memory list (no persistence)
 
-- **Backend API (FastAPI)**
-  - `GET /health`
-    - Simple health check returning `{ "status": "ok" }`.
-  - `GET /events`
-    - Returns all events in memory.
-    - Supports optional query parameter `?type=` to filter by event type.
-  - `POST /events`
-    - Creates a new event in memory.
-    - Automatically generates `id` (e.g. `evt_004`) and `timestamp` (current UTC time).
+- **List events (GET /events)**
+  - Return all events
+  - Support filtering by `type` via the `?type=` query parameter
 
 - **Frontend UI (Streamlit)**
-  - Shows backend status in the sidebar using `GET /health`.
-  - **Create Event form**:
-    - Select event type (`user_action | system | error | info`).
-    - Enter `source` and `message`.
-    - Submits to `POST /events` and shows success or error feedback.
-  - **Event list view**:
-    - Dropdown filter by event type (`all`, `user_action`, `system`, `error`, `info`).
-    - Calls `GET /events` or `GET /events?type=...` depending on the selected filter.
-    - Displays events in a table (including `timestamp`, `type`, `source`, `message`, `id`).
+  - Event table with columns: `timestamp`, `type`, `source`, `message`, `id`
+  - Dropdown filter by type: `all` / `user_action` / `system` / `error` / `info`
+  - Form to create events: `type`, `source`, `message`
+  - After a successful submission: inputs are cleared and filter is reset to `all`
 
----
+- **Initial sample data**
+  - Backend pre‑populates several events of different types on startup for quick testing of list/filter behavior.
 
 ## Data Model
 
-The backend uses the following event structure:
+Example event object returned by the backend:
 
-```js
-const eventExample = {
-  id: "evt_001",
-  timestamp: "2024-01-15T14:30:00Z",
-  type: "user_action", // user_action | system | error | info
-  source: "web_client",
-  message: "User clicked submit button"
-};
+```json
+{
+  "id": "evt_001",
+  "timestamp": "2024-01-15T14:30:00Z",
+  "type": "user_action",           // user_action | system | error | info
+  "source": "web_client",
+  "message": "User clicked submit button"
+}
 ```
 
-On creation, the client only needs to send `type`, `source`, and `message`. The backend fills in `id` and `timestamp`.
+When creating an event from the frontend (or via API), you only need to send:
 
----
+```json
+{
+  "type": "user_action",
+  "source": "web_client",
+  "message": "User clicked submit button"
+}
+```
 
-## Install Dependencies
+The backend will generate `id` and `timestamp` automatically.
 
-From the project root:
+## Project Structure
+
+```text
+.
+├─ main.py          # FastAPI backend: /events API and in‑memory event store
+├─ app.py           # Streamlit frontend: event list, filters, and create form
+├─ requirements.txt # Python dependencies
+└─ README.md        # Project documentation
+```
+
+## Requirements
+
+- Python 3.10+ (developed and tested on Python 3.11)
+- `pip` or a compatible package manager
+
+## Installation
+
+From the project root directory, install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-This installs FastAPI, Uvicorn, Streamlit, and `requests` with pinned versions.
+This will install:
 
----
+- `fastapi`
+- `uvicorn[standard]`
+- `streamlit`
+- `requests`
 
-## Run Backend
-
-From the project root:
-
-```bash
-uvicorn backend.main:app --reload --port 8000
-```
-
-- The API will be available at: `http://127.0.0.1:8000`
-- `--reload` enables auto-reload on code changes (useful for local development).
-
----
-
-## Run Frontend
+## Run the Backend (FastAPI)
 
 From the project root:
 
 ```bash
-streamlit run frontend/app.py
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-By default Streamlit will start on:
+- API base URL: `http://localhost:8000`
+- Useful endpoints:
+  - `http://localhost:8000/events`  – List events (JSON)
+  - `http://localhost:8000/docs`    – Swagger UI for testing the API
 
-- Local URL: `http://localhost:8501`
+> Note: events are held **in memory** in the `events` list. Restarting the backend clears runtime events (except for the initial sample data).
 
-The frontend expects the backend to be running at `http://127.0.0.1:8000` (configured as `BACKEND_URL` in `frontend/app.py`).
+## Run the Frontend (Streamlit)
 
----
+In a new terminal window, still at the project root:
 
-## Typical Workflow
+```bash
+streamlit run app.py
+```
 
-1. Start FastAPI backend with Uvicorn.
-2. Start the Streamlit frontend.
-3. Open `http://localhost:8501` in your browser.
-4. Check the **Backend status** in the sidebar.
-5. Use **Create Event** to add new events.
-6. Use **Filter by type** to explore different event types.
+- Default UI: `http://localhost:8501`
+- You will see:
+  - Page title: `Event Logger`
+  - **Create Event** form: Type / Source / Message / Submit
+  - **Filters** dropdown: filter events by type
+  - **Events** table: display all (or filtered) events
 
----
+## Usage
 
-## Limitations & Possible Extensions
+1. **View initial sample events**
+   - Start the backend and frontend
+   - Open the Streamlit page
+   - With `Filter by type = all`, you should see the pre‑populated sample events
 
-Current limitations:
+2. **Filter events by type**
+   - Choose `user_action`, `system`, `error`, or `info` from `Filter by type`
+   - The frontend sends `GET /events?type=<selected_type>`
+   - The table shows only events matching the selected type
 
-- Events are stored **in memory only**.
-- No authentication or authorization.
-- No pagination or persistent storage.
+3. **Create a new event**
+   - In the **Create Event** form:
+     - Select `Type`
+     - Enter `Source` (default is `web_client`)
+     - Enter `Message`
+     - Click **Submit**
+   - If `Message` is empty, you will see a warning and the event is not created
+   - On successful creation:
+     - A `Event created` message is shown
+     - Form inputs are reset to default values
+     - `Filter by type` is reset to `all`
+     - The event list refreshes to include the new event
 
-Ideas for future improvements:
+4. **Test the backend API directly**
 
-- Persist events to a real database (e.g. SQLite, PostgreSQL).
-- Add pagination and sorting on the event list.
-- Add authentication / API keys for the backend.
-- Add more metadata to events (e.g. user ID, request ID, tags).
-- Export events as CSV/JSON from the Streamlit UI.
+   - Get **all** events:
+
+     ```bash
+     curl "http://localhost:8000/events"
+     ```
+
+   - Get events of a specific type (e.g. `error`):
+
+     ```bash
+     curl "http://localhost:8000/events?type=error"
+     ```
+
+   - Create an event via `POST`:
+
+     ```bash
+     curl -X POST "http://localhost:8000/events" \
+          -H "Content-Type: application/json" \
+          -d '{
+                "type": "user_action",
+                "source": "cli_test",
+                "message": "Created from curl"
+              }'
+     ```
+
+## Extreme / Stress Testing Ideas
+
+The app is intentionally simple but already supports a variety of edge‑case and stress tests:
+
+- **Very long messages**
+  - Paste thousands of characters into the `Message` field (long logs, repeated text, etc.)
+  - Observe backend response and frontend rendering performance
+
+- **Special characters**
+  - Include `"`, `\\`, `\n`, emojis, and multi‑language text
+  - Verify JSON encoding/decoding works and the UI renders correctly
+
+- **Multi‑line messages**
+  - Use messages with multiple lines to see how they are stored and displayed
+
+- **Many events**
+  - Write a small script that repeatedly calls `POST /events` to create hundreds or thousands of events
+  - In the UI, switch filters frequently and watch for performance or memory issues
+
+These tests are useful for demonstrating how to validate the robustness of a small system (e.g. in teaching or interview settings).
+
+## Technical Details
+
+- **Backend (`main.py`)**
+  - Built with `FastAPI`
+  - Uses `CORSMiddleware` to allow cross‑origin requests (`allow_origins=["*"]`)
+  - Models defined with `pydantic.BaseModel`:
+    - `EventBase`: base fields `type`, `source`, `message`
+    - `Event`: extends `EventBase` with `id` and `timestamp`
+    - `EventCreate`: same as `EventBase`, used for incoming requests
+  - In‑memory storage: `events: List[Event]`
+    - Sample events are pre‑populated on startup
+    - `POST /events` appends new `Event` objects to the list
+
+- **Frontend (`app.py`)**
+  - Uses `requests` to call the FastAPI backend
+  - Uses `streamlit` for an interactive, reactive UI
+  - Uses `st.session_state` to reset form fields and filters after a successful submission
+  - Displays events using `st.dataframe`
+
+## Possible Extensions
+
+If you want to evolve this project further, consider:
+
+- **Persistent storage**
+  - Use SQLite / PostgreSQL / MongoDB to store events
+  - Replace the in‑memory `events` list with a real database layer
+
+- **User/session information**
+  - Record user IDs, session IDs, or request metadata inside events
+  - Improve auditing and debugging capabilities
+
+- **Richer filtering**
+  - Filter by time range (`from` / `to`)
+  - Filter by `source` or search by keywords in `message`
+
+- **Deployment**
+  - Package backend + frontend into Docker images
+  - Deploy to cloud platforms (e.g. Render, Railway, Fly.io, etc.)
+
+

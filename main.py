@@ -1,108 +1,84 @@
-from typing import List, Literal, Optional
+from datetime import datetime, timezone
+from typing import List, Optional
+from uuid import uuid4
 
-from datetime import datetime
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 
-class Event(BaseModel):
+class EventBase(BaseModel):
+    type: str
+    source: str
+    message: str
+
+
+class Event(EventBase):
     id: str
     timestamp: str
-    type: Literal["user_action", "system", "error", "info"]
-    source: str
-    message: str
 
 
-class EventCreate(BaseModel):
-    type: Literal["user_action", "system", "error", "info"]
-    source: str
-    message: str
+class EventCreate(EventBase):
+    pass
 
 
-app = FastAPI(title="Event Logger API")
-
-# Allow local Streamlit app to call this backend
-origins = [
-    "http://localhost:8501",
-    "http://127.0.0.1:8501",
-]
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# In-memory storage for events
-EVENTS: List[Event] = []
-
-
-def seed_events() -> None:
-    """Seed a single example event so the list isn't empty at first."""
-    if EVENTS:
-        return
-
-    example1 = Event(
+events: List[Event] = [
+    Event(
         id="evt_001",
         timestamp="2024-01-15T14:30:00Z",
         type="user_action",
         source="web_client",
         message="User clicked submit button",
-    )
-
-    example2 = Event(
+    ),
+    Event(
         id="evt_002",
         timestamp="2024-01-15T15:00:00Z",
         type="system",
-        source="backend_service",
-        message="Scheduled job completed successfully",
-    )
-
-    example3 = Event(
+        source="backend_worker",
+        message="Background job started",
+    ),
+    Event(
         id="evt_003",
         timestamp="2024-01-15T15:05:00Z",
         type="error",
-        source="web_client",
-        message="Failed to submit form due to validation error",
-    )
-
-    EVENTS.extend([example1, example2, example3])
-
-
-seed_events()
-
-
-@app.get("/health")
-async def health_check() -> dict:
-    return {"status": "ok"}
+        source="api_server",
+        message="Failed to process payment",
+    ),
+    Event(
+        id="evt_004",
+        timestamp="2024-01-15T15:10:00Z",
+        type="info",
+        source="monitoring_service",
+        message="Daily health check OK",
+    ),
+]
 
 
 @app.get("/events", response_model=List[Event])
-async def list_events(
-    type: Optional[Literal["user_action", "system", "error", "info"]] = Query(default=None),
-) -> List[Event]:
-    if type is None:
-        return EVENTS
-
-    return [event for event in EVENTS if event.type == type]
+def get_events(type: Optional[str] = Query(default=None)) -> List[Event]:
+    if type:
+        return [event for event in events if event.type == type]
+    return events
 
 
 @app.post("/events", response_model=Event)
-async def create_event(payload: EventCreate) -> Event:
-    new_id = f"evt_{len(EVENTS) + 1:03d}"
-    timestamp = datetime.utcnow().isoformat() + "Z"
-
+def create_event(event_in: EventCreate) -> Event:
     event = Event(
-        id=new_id,
-        timestamp=timestamp,
-        type=payload.type,
-        source=payload.source,
-        message=payload.message,
+        id=str(uuid4()),
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        type=event_in.type,
+        source=event_in.source,
+        message=event_in.message,
     )
-
-    EVENTS.append(event)
+    events.append(event)
     return event

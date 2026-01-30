@@ -1,93 +1,84 @@
 import requests
 import streamlit as st
-from typing import Optional
 
-BACKEND_URL = "http://127.0.0.1:8000"
+API_BASE = "http://localhost:8000"
+EVENT_TYPES = ["user_action", "system", "error", "info"]
+
+if "reset_after_submit" not in st.session_state:
+    st.session_state["reset_after_submit"] = False
+
+if st.session_state["reset_after_submit"]:
+    st.session_state["event_message"] = ""
+    st.session_state["event_source"] = "web_client"
+    st.session_state["event_type"] = EVENT_TYPES[0]
+    st.session_state["filter_type"] = "all"
+    st.session_state["reset_after_submit"] = False
+
+
+def fetch_events(selected_type: str | None = None) -> list[dict]:
+    params: dict[str, str] = {}
+    if selected_type and selected_type != "all":
+        params["type"] = selected_type
+    try:
+        response = requests.get(f"{API_BASE}/events", params=params, timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as exc:
+        st.error(f"Failed to fetch events: {exc}")
+        return []
+
+
+def create_event(event_type: str, source: str, message: str) -> dict | None:
+    payload = {"type": event_type, "source": source, "message": message}
+    try:
+        response = requests.post(f"{API_BASE}/events", json=payload, timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as exc:
+        st.error(f"Failed to create event: {exc}")
+        return None
+
 
 st.set_page_config(page_title="Event Logger", layout="wide")
 
 st.title("Event Logger")
-st.caption("Simple event list powered by a FastAPI backend")
 
-
-def fetch_health() -> str:
-    try:
-        resp = requests.get(f"{BACKEND_URL}/health", timeout=3)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("status", "unknown")
-    except Exception:
-        return "offline"
-
-
-def fetch_events(selected_type: Optional[str] = None):
-    try:
-        params = {}
-        if selected_type:
-            params["type"] = selected_type
-
-        resp = requests.get(f"{BACKEND_URL}/events", params=params, timeout=5)
-        resp.raise_for_status()
-        return resp.json(), None
-    except Exception as exc:
-        return [], str(exc)
-
-
-def create_event(event_type: str, source: str, message: str):
-    try:
-        payload = {
-            "type": event_type,
-            "source": source,
-            "message": message,
-        }
-        resp = requests.post(f"{BACKEND_URL}/events", json=payload, timeout=5)
-        resp.raise_for_status()
-        return resp.json(), None
-    except Exception as exc:
-        return None, str(exc)
-
-
-with st.sidebar:
-    st.header("Backend status")
-    status = fetch_health()
-    if status == "ok":
-        st.success("Backend online")
-    else:
-        st.error(f"Backend status: {status}")
-
-
-st.subheader("Create Event")
-
+st.header("Create Event")
 with st.form("create_event_form"):
-    new_type = st.selectbox("Type", ["user_action", "system", "error", "info"], index=0)
-    new_source = st.text_input("Source", value="web_client")
-    new_message = st.text_area("Message")
-    submitted = st.form_submit_button("Create")
+    type_value = st.selectbox("Type", EVENT_TYPES, key="event_type")
+    source_value = st.text_input("Source", value="web_client", key="event_source")
+    message_value = st.text_area("Message", key="event_message")
+    submitted = st.form_submit_button("Submit")
 
 if submitted:
-    if not new_message.strip():
-        st.warning("Message cannot be empty.")
+    if not message_value.strip():
+        st.warning("Message cannot be empty")
     else:
-        created, create_error = create_event(new_type, new_source, new_message)
-        if create_error:
-            st.error(f"Failed to create event: {create_error}")
-        else:
-            st.success("Event created successfully.")
+        created = create_event(type_value, source_value, message_value)
+        if created is not None:
+            st.success("Event created")
+            st.session_state["reset_after_submit"] = True
+            st.experimental_rerun()
 
+st.header("Filters")
+filter_type = st.selectbox("Filter by type", ["all"] + EVENT_TYPES, index=0, key="filter_type")
+
+
+events = fetch_events(filter_type)
 
 st.subheader("Events")
 
-event_types = ["all", "user_action", "system", "error", "info"]
-selected_type = st.selectbox("Filter by type", event_types, index=0)
-
-effective_type = None if selected_type == "all" else selected_type
-
-events, error = fetch_events(effective_type)
-
-if error:
-    st.error(f"Failed to load events: {error}")
-elif not events:
-    st.info("No events available.")
+if events:
+    rows = [
+        {
+            "timestamp": e.get("timestamp", ""),
+            "type": e.get("type", ""),
+            "source": e.get("source", ""),
+            "message": e.get("message", ""),
+            "id": e.get("id", ""),
+        }
+        for e in events
+    ]
+    st.dataframe(rows)
 else:
-    # Streamlit can directly render list-of-dicts as a table
-    st.table(events)
+    st.info("No events to display")
